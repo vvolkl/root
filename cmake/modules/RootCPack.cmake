@@ -20,6 +20,7 @@ include(InstallRequiredSystemLibraries)
 set(CPACK_PACKAGE_DESCRIPTION "ROOT project")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "ROOT project")
 set(CPACK_PACKAGE_VENDOR "ROOT project")
+set(CPACK_PACKAGE_HOMEPAGE "https://root.cern.ch")
 set(CPACK_PACKAGE_VERSION ${ROOT_VERSION})
 set(CPACK_PACKAGE_VERSION_MAJOR ${ROOT_MAJOR_VERSION})
 set(CPACK_PACKAGE_VERSION_MINOR ${ROOT_MINOR_VERSION})
@@ -126,12 +127,25 @@ else()
   set(CPACK_SOURCE_GENERATOR "TGZ;TBZ2")
 endif()
 
+
+# DEB specifics
+
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "ROOT Team")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE ${CPACK_PACKAGE_HOMEPAGE_URL})
+#set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS True)
+#set(CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS  ON)
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libx11-dev, libxpm-dev, libxft-dev, libxext-dev, libssl-dev, libpcre3-dev, xlibmesa-glu-dev, libftgl-dev, libmysqlclient-dev, libfftw3-dev, libcfitsio-dev, graphviz-dev, libavahi-compat-libdnssd-dev, libldap2-dev, python, libxml2-dev, libkrb5-dev, libgsl0-dev, libqt4-dev, libmotif-dev, libgl2ps-dev, libxmu-dev")
+file(WRITE ${CMAKE_BINARY_DIR}/postinst "echo /usr/local/lib/root > /etc/ld.so.conf.d/root-package.conf && ldconfig && echo source /usr/local/bin/thisroot.sh > /etc/profile.d/root-package-env.sh")
+file(WRITE ${CMAKE_BINARY_DIR}/prerm "rm /etc/ld.so.conf.d/root-package.conf || true; rm /etc/profile.d/root-package-env.sh || true ")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_BINARY_DIR}/postinst;${CMAKE_BINARY_DIR}/prerm")
+
 #----------------------------------------------------------------------------------------------------
 # Finally, generate the CPack per-generator options file and include the
 # base CPack configuration.
 #
 configure_file(cmake/modules/CMakeCPackOptions.cmake.in CMakeCPackOptions.cmake @ONLY)
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_BINARY_DIR}/CMakeCPackOptions.cmake)
+
 include(CPack)
 
 #----------------------------------------------------------------------------------------------------
