@@ -133,28 +133,121 @@ TPDF::~TPDF()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Begin the Cell Array painting
+/// Begin the Cell Array painting.
+///
+/// The W x H cells fill a rectangle whose top-left corner is at world
+/// coordinates (x1, y1); (x2 - x1) is the per-cell width and (y2 - y1) is
+/// the per-cell vertical step (the image extends downward from y1 by
+/// H * (y2 - y1)). The pixel data is collected via CellArrayFill in
+/// top-to-bottom, left-to-right order and emitted as a single PDF inline
+/// image in CellArrayEnd.
 
-void TPDF::CellArrayBegin(Int_t, Int_t, Double_t, Double_t, Double_t,
-                          Double_t)
+void TPDF::CellArrayBegin(Int_t W, Int_t H, Double_t x1, Double_t x2,
+                          Double_t y1, Double_t y2)
 {
-   Warning("CellArrayBegin", "not yet implemented");
+   if (W <= 0 || H <= 0) {
+      fCellArrayW = 0;
+      fCellArrayH = 0;
+      fCellArrayRGB.clear();
+      return;
+   }
+
+   fCellArrayW = W;
+   fCellArrayH = H;
+
+   Double_t xLeft  = XtoPDF(x1);
+   Double_t xRight = XtoPDF(x1 + (x2 - x1) * W);
+   Double_t yTop   = YtoPDF(y1);
+   Double_t yBot   = YtoPDF(y1 - (y2 - y1) * H);
+
+   fCellArrayXpdf    = xLeft;
+   fCellArrayYpdfBot = yBot;
+   fCellArrayWpdf    = xRight - xLeft;
+   fCellArrayHpdf    = yTop - yBot;
+
+   fCellArrayRGB.clear();
+   fCellArrayRGB.reserve(3 * std::size_t(W) * std::size_t(H));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Paint the Cell Array
+/// Paint the Cell Array: append one RGB pixel to the in-flight buffer.
 
-void TPDF::CellArrayFill(Int_t, Int_t, Int_t)
+void TPDF::CellArrayFill(Int_t r, Int_t g, Int_t b)
 {
-   Warning("CellArrayFill", "not yet implemented");
+   if (fCellArrayW <= 0 || fCellArrayH <= 0) return;
+   auto clamp = [](Int_t v) -> unsigned char {
+      if (v < 0) return 0;
+      if (v > 255) return 255;
+      return static_cast<unsigned char>(v);
+   };
+   fCellArrayRGB.push_back(clamp(r));
+   fCellArrayRGB.push_back(clamp(g));
+   fCellArrayRGB.push_back(clamp(b));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// End the Cell Array painting
+/// End the Cell Array painting: emit a PDF inline image whose pixel data
+/// is the ASCIIHex-encoded RGB buffer accumulated by CellArrayFill.
 
 void TPDF::CellArrayEnd()
 {
-   Warning("CellArrayEnd", "not yet implemented");
+   if (fCellArrayW <= 0 || fCellArrayH <= 0 || fCellArrayRGB.empty()) {
+      fCellArrayW = 0;
+      fCellArrayH = 0;
+      fCellArrayRGB.clear();
+      return;
+   }
+
+   const std::size_t expected = 3 * std::size_t(fCellArrayW) * std::size_t(fCellArrayH);
+   if (fCellArrayRGB.size() < expected) {
+      // Pad with black if the caller delivered fewer pixels than declared.
+      fCellArrayRGB.resize(expected, 0);
+   }
+
+   // Operator separators must be real newlines (not the '@' placeholder, which
+   // is only translated by TVirtualPS::PrintStr when the buffer is not under
+   // Flate compression — during a page content stream fCompress is true and
+   // '@' would land literally in the decoded stream).
+   PrintStr("\nq ");
+   WriteReal(fCellArrayWpdf);
+   WriteReal(0.);
+   WriteReal(0.);
+   WriteReal(fCellArrayHpdf);
+   WriteReal(fCellArrayXpdf);
+   WriteReal(fCellArrayYpdfBot);
+   PrintStr(" cm\n");
+   PrintStr("BI\n");
+   PrintStr("/W "); WriteInteger(fCellArrayW); PrintStr("\n");
+   PrintStr("/H "); WriteInteger(fCellArrayH); PrintStr("\n");
+   PrintStr("/CS /RGB\n");
+   PrintStr("/BPC 8\n");
+   PrintStr("/F /AHx\n");
+   PrintStr("ID\n");
+
+   static const char kHex[] = "0123456789ABCDEF";
+   const std::size_t total = fCellArrayRGB.size();
+   // Encode 60 bytes (120 hex chars) per line.
+   const std::size_t kBytesPerLine = 60;
+   char line[2 * kBytesPerLine + 2];
+   for (std::size_t off = 0; off < total; off += kBytesPerLine) {
+      std::size_t n = std::min(kBytesPerLine, total - off);
+      for (std::size_t i = 0; i < n; ++i) {
+         unsigned char v = fCellArrayRGB[off + i];
+         line[2 * i]     = kHex[(v >> 4) & 0xF];
+         line[2 * i + 1] = kHex[v & 0xF];
+      }
+      line[2 * n] = '\n';
+      line[2 * n + 1] = '\0';
+      PrintFast(static_cast<Int_t>(2 * n + 1), line);
+   }
+   PrintStr(">\n");
+   PrintStr("EI\n");
+   PrintStr("Q\n");
+
+   fCellArrayW = 0;
+   fCellArrayH = 0;
+   fCellArrayRGB.clear();
+   fCellArrayRGB.shrink_to_fit();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

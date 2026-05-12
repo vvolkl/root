@@ -65,6 +65,15 @@ protected:
    Double_t fE = 0.;                    ///< "e" value of the Current Transformation Matrix (CTM)
    Double_t fF = 0.;                    ///< "f" value of the Current Transformation Matrix (CTM)
 
+   // State for the in-flight Cell Array (inline image)
+   Int_t       fCellArrayW = 0;            ///< Cell array width in cells
+   Int_t       fCellArrayH = 0;            ///< Cell array height in cells
+   Double_t    fCellArrayXpdf = 0.;        ///< PDF x of the image's left edge
+   Double_t    fCellArrayYpdfBot = 0.;     ///< PDF y of the image's bottom edge
+   Double_t    fCellArrayWpdf = 0.;        ///< PDF width of the image
+   Double_t    fCellArrayHpdf = 0.;        ///< PDF height of the image
+   std::vector<unsigned char> fCellArrayRGB; ///< Pixel buffer (3 bytes per pixel, top-to-bottom)
+
    static Int_t fgLineJoin; ///< Appearance of joining lines
    static Int_t fgLineCap;  ///< Appearance of line caps
 
